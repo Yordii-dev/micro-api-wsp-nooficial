@@ -4,3 +4,22 @@ export const SUBJECTS_JWT = {
 };
 
 export const PREFIX_API = 'api';
+
+export enum WHATSAPP_SESSION_STATUS {
+  NOT_LOGGED = 'notLogged', // No autenticado
+  QR_GENERATED = 'qrGenerated', // QR generado (esperando escaneo)
+  QR_SCANNED = 'qrReadSuccess', // QR escaneado
+  IN_CHAT = 'inChat', // Conectado y listo
+  DISCONNECTED = 'disconnected', // Sesión caída
+}
+
+/*
+Uses cases
+
+NOT_LOGGED	Mostrar botón Conectar
+QR_GENERATED	Mostrar QR
+QR_SCANNED	Mostrar “Verificando…”
+IN_CHAT	Habilitar envío
+DISCONNECTED	Reintentar conexión
+
+*/

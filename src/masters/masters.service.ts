@@ -11,6 +11,6 @@ export class MastersService {
   }
 
   async getAllRoles() {
-    return this.prismaService.role.findMany();
+    return this.prismaService.role.findMany(); //
   }
 }

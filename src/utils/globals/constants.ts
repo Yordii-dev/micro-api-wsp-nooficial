@@ -12,7 +12,8 @@ export enum WHATSAPP_SESSION_STATUS {
   IN_CHAT = 'inChat', // Conectado y listo
   DISCONNECTED = 'disconnected', // Sesión caída
 }
-
+export const FOLDER_WPP_SESSIONS = './wpp-sessions';
+export const PREFIX_WPP_SESSION_NAME = 'identification_';
 /*
 Uses cases
 

@@ -13,8 +13,8 @@ export class MessagingController {
   }
 
   @Get('status')
-  async status(@Query('user_id') user_id: string) {
-    return this.messagingService.getStatus(+user_id);
+  async status(@Query('identification') identification: string) {
+    return this.messagingService.getStatus(+identification);
   }
 
   @Post('send-message')

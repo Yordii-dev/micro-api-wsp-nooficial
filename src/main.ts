@@ -16,7 +16,7 @@ async function bootstrap() {
 
   const configService = app.get(ConfigService);
 
-  const port = configService.get<number>('PORT') ?? 4000;
+  const port = configService.get<number>('PORT') ?? 4001;
   const hostname = configService.get<string>('HOSTNAME');
 
   app.useGlobalPipes(

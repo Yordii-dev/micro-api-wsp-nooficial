@@ -2,14 +2,11 @@ import { IsNumber, IsString } from 'class-validator';
 
 export class SendMessageDto {
   @IsNumber()
-  user_id: Number;
+  identification: Number;
 
   @IsString()
-  remitente: string;
+  destination: string;
 
   @IsString()
-  destino: string;
-
-  @IsString()
-  mensaje: string;
+  message: string;
 }

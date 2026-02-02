@@ -29,24 +29,19 @@ RUN apt-get update && apt-get install -y \
     rm -rf /var/lib/apt/lists/*
 
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=false
-
+ENV VAR1=production
 
 WORKDIR /app
 
 COPY package*.json ./
 COPY prisma ./prisma/
 
+RUN mkdir -p /app/wpp-sessions
 RUN npm install
-
 RUN npx prisma generate
 
 COPY . .
 
-RUN mkdir -p /app/wpp-sessions
-
 EXPOSE 4001
 
-# 8. Comando por defecto
-# CMD ["npm", "run", "start:prod"]
-# Hot reload en desarrollo
 CMD ["npm", "run", "start:dev"]

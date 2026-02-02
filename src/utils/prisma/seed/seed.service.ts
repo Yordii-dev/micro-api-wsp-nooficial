@@ -8,17 +8,6 @@ export class SeedService {
   constructor(private prisma: PrismaService) {}
 
   //MASTERS
-  async setRoles() {
-    for (const role of Object.values(ROLES)) {
-      await this.prisma.role.upsert({
-        where: { name: role },
-        update: {},
-        create: { name: role },
-      });
-    }
-  }
 
-  async run() {
-    await this.setRoles();
-  }
+  async run() {}
 }

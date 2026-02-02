@@ -1,30 +1,31 @@
 services:
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: micro-api-wsp-nooficial-api
-    container_name: micro_api_wsp
-    restart: unless-stopped #Para resiliencia
-    env_file:
-      - .env
-      - .env.development
-    ports:
-      - "${PORT:-4001}:4001"
-    depends_on:
-      mysql_dev:
-        condition: service_healthy
-    volumes:
-      - ./src:/app/src
-      - ./prisma:/app/prisma
-      - ./wpp-sessions:/app/wpp-sessions
-      - /app/node_modules
-    networks:
-      - nestjs_network
-    command: sh -c "npx prisma migrate dev && npm run start:dev" #Sobreescribir el comando de Dockerfile
+  # api:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   image: img_api
+  #   container_name: micro_api_wsp
+  #   restart: unless-stopped #Para resiliencia
+  #   env_file:
+  #     - .env
+  #     - .env.development
+  #   ports:
+  #     - "${PORT:-4001}:4001"
+  #   depends_on:
+  #     mysql_dev:
+  #       condition: service_healthy
+  #   volumes:
+  #     - ./src:/app/src
+  #     - ./prisma:/app/prisma 
+  #     # - ./wpp-sessions:/app/wpp-sessions
+  #     - wpp_sessions_data:/app/wpp-sessions
+  #     - /app/node_modules
+  #   networks:
+  #     - nestjs_network
+  #   command: sh -c "npm run prisma:migrate && npm run start:dev" #Sobreescribir el comando de Dockerfile
 
   mysql_dev:
-    image: mysql:8.0
+    image: mysql:8.0 
     container_name: mysql_dev
     restart: unless-stopped
     environment:
@@ -55,6 +56,7 @@ services:
 
 volumes:
   mysql_dev_data:
+  wpp_sessions_data:
 
 networks:
   nestjs_network:

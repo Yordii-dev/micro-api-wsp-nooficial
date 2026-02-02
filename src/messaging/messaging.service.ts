@@ -3,7 +3,10 @@ import { SendMessageDto } from './dto/send-message.dto';
 import { WhatsappService } from 'services/wppconnect/whatsapp.service';
 import { PrismaService } from '@utils/prisma/prisma.service';
 import { ConnectDto } from './dto/connect.dto';
-import { WHATSAPP_SESSION_STATUS } from '@utils/globals/constants';
+import {
+  PREFIX_WPP_SESSION_NAME,
+  WHATSAPP_SESSION_STATUS,
+} from '@utils/globals/constants';
 
 @Injectable()
 export class MessagingService {
@@ -13,40 +16,45 @@ export class MessagingService {
   ) {}
 
   async connectSession(dto: ConnectDto) {
-    const { user_id: userId } = dto;
-    const sessionName = `user_${userId}`;
+    const { identification } = dto;
+    const session_name = `${PREFIX_WPP_SESSION_NAME}${identification}`;
 
     await this.prisma.whatsappSession.upsert({
-      where: { sessionName },
+      where: { session_name },
       update: {},
       create: {
-        userId,
-        sessionName,
+        identification,
+        session_name,
       },
     });
 
-    await this.whatsappService.initClient(sessionName, userId);
+    await this.whatsappService.initClient(session_name, identification);
     return { success: true, message: 'QR generado' };
   }
 
-  async getStatus(userId: number) {
+  async getStatus(identification: number) {
     const session = await this.prisma.whatsappSession.findFirst({
-      where: { userId },
+      where: { identification },
     });
 
-    return !session ? WHATSAPP_SESSION_STATUS.NOT_LOGGED : session.sessionState;
+    if (!session)
+      return {
+        session_state: WHATSAPP_SESSION_STATUS.NOT_LOGGED,
+      };
+
+    return session;
   }
 
   async sendMessage(dto: SendMessageDto) {
-    const sessionName = `user_${dto.user_id}`;
+    const session_name = `${PREFIX_WPP_SESSION_NAME}${dto.identification}`;
     const session = await this.prisma.whatsappSession.findUnique({
-      where: { sessionName },
+      where: { session_name },
     });
 
-    if (!session || session.sessionState !== WHATSAPP_SESSION_STATUS.IN_CHAT) {
+    if (!session || session.session_state !== WHATSAPP_SESSION_STATUS.IN_CHAT) {
       throw new Error('Whatsapp no habilitado o sesión no conectada.');
     }
 
-    return this.whatsappService.sendMessage(sessionName, dto);
+    return this.whatsappService.sendMessage(session_name, dto);
   }
 }

@@ -1,0 +1,69 @@
+services:
+  wsp-api:
+  #No para PROD, build + compose up por separado
+    # build: #Solo se ejecuta con docker compose ... --build
+    #   context: .
+    #   dockerfile: Dockerfile.prod
+    image: yordii/micro-wsp-api:1.0.0
+    container_name: wsp_api_prod
+    restart: unless-stopped #Para resiliencia
+
+
+    # Solo para Docker swarm
+    # deploy:
+    #   restart_policy:
+    #     condition: on-failure
+    #     delay: 5s
+    #     max-attempts: 3
+    #     window: 120s
+    env_file:
+      - .env.production
+    ports:
+      - "${PORT}:4001"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - whatsapp_data_prod:/app/wpp-sessions
+    networks:
+      - mi-red
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4001"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  mysql:
+    image: mysql:8.0 
+    container_name: wsp_mysql_prod
+    restart: unless-stopped
+    
+    #Solo .env para interpolacion de variables, por eso se pasa por cli el .env.production
+    env_file:
+      - .env.production
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+ 
+    volumes:
+      - mysql_data_prod:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d #Solo si el volumne no existe, para inicializar la DB
+ 
+    networks:
+      - mi-red
+
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u${DB_USERNAME}", "-p${DB_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mysql_data_prod:
+  whatsapp_data_prod:
+
+networks:
+  mi-red:

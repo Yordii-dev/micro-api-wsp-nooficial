@@ -1,47 +1,68 @@
-FROM node:20-bullseye
-
-RUN apt-get update && apt-get install -y \
-    wget \
-    ca-certificates \
-    fonts-liberation \
-    libasound2 \
-    libatk-bridge2.0-0 \
-    libatk1.0-0 \
-    libatspi2.0-0 \
-    libcups2 \
-    libdbus-1-3 \
-    libdrm2 \
-    libgbm1 \
-    libgtk-3-0 \
-    libnspr4 \
-    libnss3 \
-    libwayland-client0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxfixes3 \
-    libxkbcommon0 \
-    libxrandr2 \
-    xdg-utils \
-    libu2f-udev \
-    libvulkan1 \
-    openssl \
-    --no-install-recommends && \
-    rm -rf /var/lib/apt/lists/*
-
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=false
-ENV VAR1=production
+FROM node:20-slim AS builder
 
 WORKDIR /app
 
 COPY package*.json ./
-COPY prisma ./prisma/
 
-RUN mkdir -p /app/wpp-sessions
 RUN npm install
-RUN npx prisma generate
 
 COPY . .
 
-EXPOSE 4001
+# Se genera en node_modules
+RUN npm run prisma:generate 
 
-CMD ["npm", "run", "start:dev"]
+RUN npm run build
+RUN npm prune --omit=dev
+
+FROM node:20-slim AS runtime
+RUN apt-get update && apt-get install -y chromium --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
+# RUN apt-get update && apt-get install -y \
+#     wget \
+#     ca-certificates \
+#     fonts-liberation \
+#     libasound2 \
+#     libatk-bridge2.0-0 \
+#     libatk1.0-0 \
+#     libatspi2.0-0 \
+#     libcups2 \
+#     libdbus-1-3 \
+#     libdrm2 \
+#     libgbm1 \
+#     libgtk-3-0 \
+#     libnspr4 \
+#     libnss3 \
+#     libwayland-client0 \
+#     libxcomposite1 \
+#     libxdamage1 \
+#     libxfixes3 \
+#     libxkbcommon0 \
+#     libxrandr2 \
+#     xdg-utils \
+#     libu2f-udev \
+#     libvulkan1 \
+#     openssl \
+#     --no-install-recommends && \
+#     rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY package*.json ./
+
+# RUN npm run install:ci
+# RUN npm install dotenv-cli --save
+
+COPY --from=builder /app/dist ./dist
+# COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+# COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules ./node_modules
+
+COPY prisma ./prisma
+COPY prisma.config.ts ./
+
+COPY entrypoint.sh ./
+ENTRYPOINT ["sh", "entrypoint.sh"]
+
+
+# CMD ["npm", "run", "start:prod"]

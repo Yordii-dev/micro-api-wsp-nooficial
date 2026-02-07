@@ -23,6 +23,13 @@ jobs:
           docker build -t yordii/micro-wsp-api:latest . -f Dockerfile.prod
           docker push yordii/micro-wsp-api:latest
 
+  update-compose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: scp to vps
+        run: |
+          scp -r .\compose.prod.yml .\.env.production .\mysql-init ubuntu@3.22.200.156:/home/ubuntu/micro_api_wsp/
+
   deploy-on-vps:
     runs-on: ubuntu-latest
     needs: build-and-push-img

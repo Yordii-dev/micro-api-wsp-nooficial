@@ -4,7 +4,7 @@ services:
     # build: #Solo se ejecuta con docker compose ... --build
     #   context: .
     #   dockerfile: Dockerfile.prod
-    image: yordii/micro-wsp-api:1.0.0
+    image: yordii/micro-wsp-api:1.2.0
     container_name: wsp_api_prod
     restart: unless-stopped #Para resiliencia
 
@@ -29,7 +29,7 @@ services:
       - mi-red
 
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4001"]
+      test: ["CMD", "curl", "-f", "http://localhost:4001/api"]
       interval: 10s
       timeout: 10s
       retries: 5
@@ -39,7 +39,7 @@ services:
     container_name: wsp_mysql_prod
     restart: unless-stopped
     
-    #Solo .env para interpolacion de variables, por eso se pasa por cli el .env.production
+    #Solo .env para interpolacion de variables, por eso se pasa por cli el .env.production, --env-file es solo para interpolar vars, no para inyectar en container
     env_file:
       - .env.production
     environment:
@@ -55,6 +55,14 @@ services:
     networks:
       - mi-red
 
+    # Para que no se coma memoria y no se active OOM KILLER de Linux
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+
+        reservations:
+          memory: 512M
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u${DB_USERNAME}", "-p${DB_PASSWORD}"]
       interval: 10s

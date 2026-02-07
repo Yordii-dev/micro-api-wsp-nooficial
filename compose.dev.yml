@@ -3,9 +3,8 @@ services:
     image: mysql:8.0 
     container_name: wsp_mysql_dev
     restart: unless-stopped
-    env_file:
-      - .env
-      - .env.development
+    # env_file:
+    #   - .env.development
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
       MYSQL_DATABASE: ${DB_DATABASE}
@@ -13,13 +12,13 @@ services:
       MYSQL_PASSWORD: ${DB_PASSWORD}
 
     ports:
-      - "${DB_PORT:-3307}:3306"
+      - "${DB_PORT}:3306"
     volumes:
       - mysql_data_dev:/var/lib/mysql
       - ./mysql-init:/docker-entrypoint-initdb.d #Solo si el volumne no existe, para inicializar la DB
 
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u${DB_USERNAME:-nestjs}", "-p${DB_PASSWORD:-password}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u${DB_USERNAME}", "-p${DB_PASSWORD}"]
       interval: 10s
       timeout: 5s
       retries: 5

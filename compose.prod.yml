@@ -4,7 +4,7 @@ services:
     # build: #Solo se ejecuta con docker compose ... --build
     #   context: .
     #   dockerfile: Dockerfile.prod
-    image: yordii/micro-wsp-api:latest
+    image: yordii/micro-wsp-api:${IMAGE_TAG}
     container_name: wsp_api_prod
     restart: unless-stopped #Para resiliencia
 

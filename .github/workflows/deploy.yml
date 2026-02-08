@@ -44,5 +44,7 @@ jobs:
           script: |
             cd micro_api_wsp/
             docker pull yordii/micro-wsp-api:latest
-            docker-compose -f compose.prod.yml --env-file .env.production down --remove-orphans
+
+            docker-compose -f compose.prod.yml --env-file .env.production down
+            docker-compose -f compose.prod.yml --env-file .env.production pull            
             docker-compose -f compose.prod.yml --env-file .env.production up -d --force-recreate

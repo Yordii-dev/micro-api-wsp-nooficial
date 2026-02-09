@@ -43,7 +43,7 @@ services:
     env_file:
       - .env.production
     ports:
-      - "127.0.0.1:3307:3307"
+      - "127.0.0.1:3307:3306"
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
       MYSQL_DATABASE: ${DB_DATABASE}

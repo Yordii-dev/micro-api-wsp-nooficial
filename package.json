@@ -26,7 +26,7 @@
     "prisma:generate": "npx prisma generate",
     "prisma:reset": "dotenv -e .env.development -- npx prisma migrate reset",
     "prisma:reset-prod": "cross-env NODE_ENV=production dotenv -e .env.production -- npx prisma migrate reset --force",
-    "git:push": "scp.ps1 && git push"
+    "git:push": "powershell -ExecutionPolicy Bypass -File scp.ps1 && git push"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

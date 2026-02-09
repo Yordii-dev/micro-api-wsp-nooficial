@@ -42,6 +42,8 @@ services:
     #Solo .env para interpolacion de variables, por eso se pasa por cli el .env.production, --env-file es solo para interpolar vars, no para inyectar en container
     env_file:
       - .env.production
+    ports:
+      - "127.0.0.1:3307:3307"
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
       MYSQL_DATABASE: ${DB_DATABASE}

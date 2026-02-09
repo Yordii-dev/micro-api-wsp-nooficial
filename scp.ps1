@@ -1,1 +1,1 @@
-scp -r .\compose.prod.yml .\.env.production .\mysql-init ubuntu@3.22.200.156:/home/ubuntu/micro_api_wsp/
+scp .\.env.production ubuntu@3.22.200.156:/home/ubuntu/micro_api_wsp/

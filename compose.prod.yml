@@ -19,7 +19,7 @@ services:
     env_file:
       - .env.production
     ports:
-      - "${PORT}:4001"
+      - "${PORT}:${PORT}"
     depends_on:
       mysql:
         condition: service_healthy
@@ -29,7 +29,7 @@ services:
       - mi-red
 
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4001/api"]
+      test: ["CMD", "curl", "-f", "http://localhost:${PORT}/api"]
       interval: 10s
       timeout: 10s
       retries: 5

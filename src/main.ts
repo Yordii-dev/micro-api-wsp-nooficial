@@ -4,7 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { ValidationPipe } from '@nestjs/common';
 import { JwtExceptionFilter } from '@utils/exceptions/Jwt-exception';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { corsConfig } from 'cors.config';
+import { createCorsConfig } from 'cors.config';
 import { dtoExceptions } from '@utils/exceptions/dto-exception';
 import { GlobalExceptionFilter } from '@utils/exceptions/global-exception';
 import { ResponseInterceptor } from '@utils/interceptors/response.interceptor';
@@ -18,6 +18,7 @@ async function bootstrap() {
 
   const port = configService.get<number>('PORT') ?? 4001;
   const hostname = configService.get<string>('HOSTNAME');
+  const front_domain = configService.get<string>('FRONT_DOMAIN');
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -26,7 +27,8 @@ async function bootstrap() {
       exceptionFactory: dtoExceptions,
     }),
   );
-  app.enableCors(corsConfig);
+  // app.enableCors(corsConfig);
+  app.enableCors(createCorsConfig(configService));
   app.useGlobalFilters(new JwtExceptionFilter(), new GlobalExceptionFilter());
 
   app.useGlobalInterceptors(new ResponseInterceptor());

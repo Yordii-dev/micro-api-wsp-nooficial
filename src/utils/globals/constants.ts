@@ -10,7 +10,7 @@ export enum WHATSAPP_SESSION_STATUS {
   QR_GENERATED = 'qrGenerated', // QR generado (esperando escaneo)
   QR_SCANNED = 'qrReadSuccess', // QR escaneado
   IN_CHAT = 'inChat', // Conectado y listo
-  DISCONNECTED = 'disconnected', // Sesión caída
+  DISCONNECTED = 'disconnectedMobile', // Sesión caída
 }
 export const FOLDER_WPP_SESSIONS = './wpp-sessions';
 export const PREFIX_WPP_SESSION_NAME = 'identification_';

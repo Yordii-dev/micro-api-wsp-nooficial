@@ -108,7 +108,10 @@ export class WhatsappService implements OnModuleInit {
 
       await this.prisma.whatsappSession.update({
         where: { session_name },
-        data: { session_state: 'disconnected', status: false },
+        data: {
+          session_state: WHATSAPP_SESSION_STATUS.DISCONNECTED,
+          status: false,
+        },
       });
     }
   }

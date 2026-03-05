@@ -10,6 +10,7 @@ import { SendMessageDto } from 'messaging/dto/send-message.dto';
 import { MessagingGateway } from 'sockets/messaging.gateway';
 import { extractPhoneFromWid } from './utils/extract-phone';
 import { WhatsappSession } from '@prisma/client';
+import { rmSync } from 'fs';
 
 @Injectable()
 export class WhatsappService implements OnModuleInit {
@@ -45,56 +46,71 @@ export class WhatsappService implements OnModuleInit {
   async initClient(session_name: string, identification: number) {
     if (this.clients.has(session_name)) return;
 
-    const client = await wppconnect.create({
-      session: session_name,
-      folderNameToken: `${FOLDER_WPP_SESSIONS}`,
-      autoClose: 0,
-      puppeteerOptions: {
-        headless: true,
-        args: ['--no-sandbox'],
-        userDataDir: `${FOLDER_WPP_SESSIONS}/${session_name}`,
-      },
+    try {
+      const lockPath = `${FOLDER_WPP_SESSIONS}/${session_name}/Singleton*`;
 
-      // Cuando genera QR
-      catchQR: async (base64Qr) => {
-        await this.prisma.whatsappSession.update({
-          where: { session_name },
-          data: { session_state: 'qrGenerated' },
-        });
+      try {
+        rmSync(lockPath, { force: true });
+      } catch {}
 
-        this.gateway.emitQR(identification, base64Qr);
+      const client = await wppconnect.create({
+        session: session_name,
+        folderNameToken: `${FOLDER_WPP_SESSIONS}`,
+        autoClose: 0,
+        puppeteerOptions: {
+          headless: true,
+          args: ['--no-sandbox'],
+          userDataDir: `${FOLDER_WPP_SESSIONS}/${session_name}`,
+        },
 
-        console.log('QR enviado al frontend:', identification);
-      },
-
-      statusFind: async (status) => {
-        let whatsapp_session: WhatsappSession | undefined;
-        if (
-          status === WHATSAPP_SESSION_STATUS.QR_SCANNED ||
-          status === WHATSAPP_SESSION_STATUS.IN_CHAT
-        ) {
-          const wid = await client.getWid();
-          const phone = extractPhoneFromWid(wid);
-
-          whatsapp_session = await this.prisma.whatsappSession.update({
+        // Cuando genera QR
+        catchQR: async (base64Qr) => {
+          await this.prisma.whatsappSession.update({
             where: { session_name },
-            data: {
-              session_state: status,
-              phone,
-            },
+            data: { session_state: 'qrGenerated' },
           });
-        } else {
-          whatsapp_session = await this.prisma.whatsappSession.update({
-            where: { session_name },
-            data: { session_state: status },
-          });
-        }
 
-        this.gateway.emitStatus(identification, whatsapp_session);
-      },
-    });
+          this.gateway.emitQR(identification, base64Qr);
 
-    this.clients.set(session_name, client);
+          console.log('QR enviado al frontend:', identification);
+        },
+
+        statusFind: async (status) => {
+          let whatsapp_session: WhatsappSession | undefined;
+          if (
+            status === WHATSAPP_SESSION_STATUS.QR_SCANNED ||
+            status === WHATSAPP_SESSION_STATUS.IN_CHAT
+          ) {
+            const wid = await client.getWid();
+            const phone = extractPhoneFromWid(wid);
+
+            whatsapp_session = await this.prisma.whatsappSession.update({
+              where: { session_name },
+              data: {
+                session_state: status,
+                phone,
+              },
+            });
+          } else {
+            whatsapp_session = await this.prisma.whatsappSession.update({
+              where: { session_name },
+              data: { session_state: status },
+            });
+          }
+
+          this.gateway.emitStatus(identification, whatsapp_session);
+        },
+      });
+
+      this.clients.set(session_name, client);
+    } catch (error) {
+      console.error(`Error iniciando sesión ${session_name}`, error);
+
+      await this.prisma.whatsappSession.update({
+        where: { session_name },
+        data: { session_state: 'disconnected', status: false },
+      });
+    }
   }
 
   async sendMessage(session_name: string, dto: SendMessageDto) {
@@ -106,7 +122,11 @@ export class WhatsappService implements OnModuleInit {
     if (session.session_state !== 'inChat')
       throw new Error('Sesión no conectada');
 
-    const client = this.clients.get(session_name);
+    let client = this.clients.get(session_name);
+    if (!client) {
+      await this.initClient(session_name, session.identification);
+      client = this.clients.get(session_name);
+    }
     if (!client) throw new Error('Cliente no conectado en runtime');
 
     const to = dto.destination.replace(/\D/g, '') + '@c.us';

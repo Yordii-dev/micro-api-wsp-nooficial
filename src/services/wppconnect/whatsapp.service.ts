@@ -98,7 +98,11 @@ export class WhatsappService implements OnModuleInit {
       const client = await wppconnect.create({
         session: session_name,
         folderNameToken: `${FOLDER_WPP_SESSIONS}`,
-        autoClose: 0,
+        // autoClose: 0,
+        autoClose: 99999999, //prácticamente nunca cierra solo
+        // whatsappVersion: '2.2412.54',
+        // whatsappVersion: '2.2408.54',
+        // whatsappVersion: '2.2406.7',
         puppeteerOptions: {
           headless: true,
           // args: ['--no-sandbox'],
@@ -124,21 +128,49 @@ export class WhatsappService implements OnModuleInit {
         },
 
         statusFind: async (status) => {
+          // Si WA desconecta remotamente, limpiar el Map para permitir reinicio
+          if (
+            status === WHATSAPP_SESSION_STATUS.DISCONNECTED ||
+            status === 'serverClose'
+          ) {
+            this.clients.delete(session_name);
+          }
+
           let whatsapp_session: WhatsappSession | undefined;
           if (
             status === WHATSAPP_SESSION_STATUS.QR_SCANNED ||
             status === WHATSAPP_SESSION_STATUS.IN_CHAT
           ) {
-            const wid = await client.getWid();
-            const phone = extractPhoneFromWid(wid);
+            // const wid = await client.getWid();
+            // const phone = extractPhoneFromWid(wid);
 
-            whatsapp_session = await this.prisma.whatsappSession.update({
-              where: { session_name },
-              data: {
-                session_state: status,
-                phone,
-              },
-            });
+            // whatsapp_session = await this.prisma.whatsappSession.update({
+            //   where: { session_name },
+            //   data: {
+            //     session_state: status,
+            //     phone,
+            //   },
+            // });
+            // ✅ Obtener el client desde el Map, no del closure
+            const activeClient = this.clients.get(session_name) ?? client;
+
+            console.log({ activeClient });
+
+            try {
+              const wid = await activeClient.getWid();
+              const phone = extractPhoneFromWid(wid);
+
+              whatsapp_session = await this.prisma.whatsappSession.update({
+                where: { session_name },
+                data: { session_state: status, phone },
+              });
+            } catch {
+              // Si aún no está listo, actualizar sin phone
+              whatsapp_session = await this.prisma.whatsappSession.update({
+                where: { session_name },
+                data: { session_state: status },
+              });
+            }
           } else {
             whatsapp_session = await this.prisma.whatsappSession.update({
               where: { session_name },

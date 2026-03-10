@@ -5,12 +5,13 @@ import {
 } from '@utils/globals/constants';
 import { PrismaService } from '@utils/prisma/prisma.service';
 import * as wppconnect from '@wppconnect-team/wppconnect';
-import { existsSync } from 'fs';
+import { existsSync, readdirSync } from 'fs';
 import { SendMessageDto } from 'messaging/dto/send-message.dto';
 import { MessagingGateway } from 'sockets/messaging.gateway';
 import { extractPhoneFromWid } from './utils/extract-phone';
 import { WhatsappSession } from '@prisma/client';
 import { rmSync } from 'fs';
+import { join } from 'path';
 
 @Injectable()
 export class WhatsappService implements OnModuleInit {
@@ -42,16 +43,57 @@ export class WhatsappService implements OnModuleInit {
       }
     }
   }
+  // ✅ Limpia TODOS los archivos de lock que deja Chromium
+  private cleanChromiumLocks(session_name: string) {
+    const sessionDir = join(FOLDER_WPP_SESSIONS, session_name);
+    if (!existsSync(sessionDir)) return;
 
+    // Archivos de lock conocidos de Chromium/Puppeteer
+    const exactLockFiles = [
+      'SingletonLock',
+      'SingletonSocket',
+      'SingletonCookiesLock',
+      'lockfile',
+      '.org.chromium.Chromium.XXXXXX', // temp lock
+    ];
+
+    for (const file of exactLockFiles) {
+      const filePath = join(sessionDir, file);
+      if (existsSync(filePath)) {
+        try {
+          rmSync(filePath, { force: true });
+          console.log(`🔓 Lock eliminado: ${filePath}`);
+        } catch (e) {
+          console.warn(`⚠️ No se pudo eliminar ${filePath}:`, e.message);
+        }
+      }
+    }
+
+    // También busca archivos que empiecen con "Singleton" dinámicamente
+    try {
+      const files = readdirSync(sessionDir);
+      for (const file of files) {
+        if (file.startsWith('Singleton') || file === 'lockfile') {
+          const filePath = join(sessionDir, file);
+          try {
+            rmSync(filePath, { force: true });
+            console.log(`🔓 Lock dinámico eliminado: ${filePath}`);
+          } catch {}
+        }
+      }
+    } catch {}
+  }
   async initClient(session_name: string, identification: number) {
     if (this.clients.has(session_name)) return;
+    // ✅ Limpiar locks ANTES de iniciar Chromium
+    this.cleanChromiumLocks(session_name);
 
     try {
-      const lockPath = `${FOLDER_WPP_SESSIONS}/${session_name}/Singleton*`;
+      // const lockPath = `${FOLDER_WPP_SESSIONS}/${session_name}/Singleton*`;
 
-      try {
-        rmSync(lockPath, { force: true });
-      } catch {}
+      // try {
+      //   rmSync(lockPath, { force: true });
+      // } catch {}
 
       const client = await wppconnect.create({
         session: session_name,
@@ -59,7 +101,13 @@ export class WhatsappService implements OnModuleInit {
         autoClose: 0,
         puppeteerOptions: {
           headless: true,
-          args: ['--no-sandbox'],
+          // args: ['--no-sandbox'],
+          args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage', // ✅ Importante en Docker
+            '--disable-gpu',
+          ],
           userDataDir: `${FOLDER_WPP_SESSIONS}/${session_name}`,
         },
 

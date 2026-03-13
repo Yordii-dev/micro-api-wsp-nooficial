@@ -22,6 +22,82 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - lotiza-dev
 
+  # PostgreSQL exclusivo para Evolution
+  postgres_dev:
+    image: postgres:16-alpine
+    container_name: wsp_postgres_dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: evolution
+      POSTGRES_PASSWORD: ${EVOLUTION_DB_PASSWORD}
+      POSTGRES_DB: ${DB_EVOLUTION_DATABASE}
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+    networks:
+      - lotiza-dev
+
+  # ─── Redis (caché de sesiones para Evolution) ──────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: wsp_redis_dev
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - lotiza-dev
+ 
+  # ─── Evolution API ─────────────────────────────────────────────────
+  evolution:
+  
+    image: evoapicloud/evolution-api:latest
+    container_name: wsp_evolution_dev
+    restart: unless-stopped
+    ports:
+      - '8081:8080'
+    environment:
+      SERVER_URL: ${EVOLUTION_SERVER_URL}
+ 
+      AUTHENTICATION_TYPE: apikey
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY}
+      WA_VERSION_FETCH_ON_STARTUP: 'true'
+       # Override manual de versión conocida que funciona actualmente
+      WA_VERSION: '2.3000.1023179494'
+
+      # Usa el mismo MySQL que tu app, mismas credenciales
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://evolution:${EVOLUTION_DB_PASSWORD}@postgres_dev:5432/${DB_EVOLUTION_DATABASE}
+      DATABASE_SAVE_DATA_INSTANCE: 'true'
+      DATABASE_SAVE_DATA_NEW_MESSAGE: 'false'
+      DATABASE_SAVE_DATA_CONTACTS: 'false'
+      DATABASE_SAVE_DATA_CHATS: 'false'
+ 
+      # Redis para que las sesiones sobrevivan reinicios
+      CACHE_REDIS_ENABLED: 'true'
+      CACHE_REDIS_URI: redis://redis:6379
+      CACHE_REDIS_TTL: '604800'   # 7 días
+ 
+      # Webhook por instancia hacia tu NestJS
+      WEBHOOK_GLOBAL_ENABLED: 'false'
+      WEBHOOK_EVENTS_QRCODE_UPDATED: 'true'
+      WEBHOOK_EVENTS_CONNECTION_UPDATE: 'true'
+      WEBHOOK_EVENTS_MESSAGES_UPSERT: 'false'
+    depends_on:
+      postgres_dev:
+        condition: service_started
+      redis:
+        condition: service_started
+    networks:
+      - lotiza-dev
+ 
 volumes:
   mysql_data_dev:
+  postgres_data_dev:
+  redis_data:
+ 
+networks:
+  lotiza-dev:
+    driver: bridge

@@ -58,7 +58,8 @@ jobs:
           key: ${{ secrets.EC2_KEY }}
           script: |
             docker rm -f wsp_api_prod || true
-            docker rm -f wsp_mysql_prod || true
+            docker rm -f wsp_mysql_prod || true            
+            docker rm -f wsp_evolution_prod || true
 
   deploy:
     runs-on: ubuntu-latest

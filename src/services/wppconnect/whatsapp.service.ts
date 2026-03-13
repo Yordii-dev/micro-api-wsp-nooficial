@@ -1,200 +1,147 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
-import {
-  FOLDER_WPP_SESSIONS,
-  WHATSAPP_SESSION_STATUS,
-} from '@utils/globals/constants';
 import { PrismaService } from '@utils/prisma/prisma.service';
-import * as wppconnect from '@wppconnect-team/wppconnect';
-import { existsSync, readdirSync } from 'fs';
 import { SendMessageDto } from 'messaging/dto/send-message.dto';
 import { MessagingGateway } from 'sockets/messaging.gateway';
-import { extractPhoneFromWid } from './utils/extract-phone';
-import { WhatsappSession } from '@prisma/client';
-import { rmSync } from 'fs';
-import { join } from 'path';
+import { bootstrapClients } from './utils/bootstrap-clients';
+import { WHATSAPP_SESSION_STATUS } from '@utils/globals/constants';
+import { cleanChromiumLocks } from './utils/clear-chromium-locks';
+import * as wppconnect from '@wppconnect-team/wppconnect';
+import { baseConfigWpp } from './utils/base-config-wpp';
+import { SessionManager } from './utils/session-manager';
 
 @Injectable()
 export class WhatsappService implements OnModuleInit {
-  private clients = new Map<string, any>();
-
   constructor(
     private prisma: PrismaService,
     private gateway: MessagingGateway,
+    private sessionManager: SessionManager,
   ) {}
 
-  //se ejecuta al iniciar el módulo
+  //se ejecuta al iniciar el api
   async onModuleInit() {
     console.log('Iniciando WhatsappService...');
-
-    this.bootstrapClients().catch((err) => console.error(err));
+    // uso catch para que no bloquee el arranque del servidor
+    bootstrapClients(this.prisma, this.initClient.bind(this)).catch((err) =>
+      console.error(err),
+    );
   }
 
-  async bootstrapClients() {
-    const sessions = await this.prisma.whatsappSession.findMany({
-      where: { status: true },
-    });
-
-    for (const s of sessions) {
-      const folderExists = existsSync(
-        `${FOLDER_WPP_SESSIONS}/${s.session_name}`,
-      );
-      if (folderExists) {
-        await this.initClient(s.session_name, s.identification);
-      }
-    }
-  }
-  // ✅ Limpia TODOS los archivos de lock que deja Chromium
-  private cleanChromiumLocks(session_name: string) {
-    const sessionDir = join(FOLDER_WPP_SESSIONS, session_name);
-    if (!existsSync(sessionDir)) return;
-
-    // Archivos de lock conocidos de Chromium/Puppeteer
-    const exactLockFiles = [
-      'SingletonLock',
-      'SingletonSocket',
-      'SingletonCookiesLock',
-      'lockfile',
-      '.org.chromium.Chromium.XXXXXX', // temp lock
-    ];
-
-    for (const file of exactLockFiles) {
-      const filePath = join(sessionDir, file);
-      if (existsSync(filePath)) {
-        try {
-          rmSync(filePath, { force: true });
-          console.log(`🔓 Lock eliminado: ${filePath}`);
-        } catch (e) {
-          console.warn(`⚠️ No se pudo eliminar ${filePath}:`, e.message);
-        }
-      }
-    }
-
-    // También busca archivos que empiecen con "Singleton" dinámicamente
-    try {
-      const files = readdirSync(sessionDir);
-      for (const file of files) {
-        if (file.startsWith('Singleton') || file === 'lockfile') {
-          const filePath = join(sessionDir, file);
-          try {
-            rmSync(filePath, { force: true });
-            console.log(`🔓 Lock dinámico eliminado: ${filePath}`);
-          } catch {}
-        }
-      }
-    } catch {}
-  }
   async initClient(session_name: string, identification: number) {
-    if (this.clients.has(session_name)) return;
-    // ✅ Limpiar locks ANTES de iniciar Chromium
-    this.cleanChromiumLocks(session_name);
+    // if (this.sessionManager.has(session_name)) return;
+    const existing = this.sessionManager.get(session_name);
+
+    if (existing) {
+      try {
+        await existing.close();
+      } catch {}
+      this.sessionManager.remove(session_name);
+    }
+
+    cleanChromiumLocks(session_name);
 
     try {
-      // const lockPath = `${FOLDER_WPP_SESSIONS}/${session_name}/Singleton*`;
-
-      // try {
-      //   rmSync(lockPath, { force: true });
-      // } catch {}
-
       const client = await wppconnect.create({
-        session: session_name,
-        folderNameToken: `${FOLDER_WPP_SESSIONS}`,
-        // autoClose: 0,
-        autoClose: 99999999, //prácticamente nunca cierra solo
-        // whatsappVersion: '2.2412.54',
-        // whatsappVersion: '2.2408.54',
-        // whatsappVersion: '2.2406.7',
-        puppeteerOptions: {
-          headless: true,
-          // args: ['--no-sandbox'],
-          args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage', // ✅ Importante en Docker
-            '--disable-gpu',
-          ],
-          userDataDir: `${FOLDER_WPP_SESSIONS}/${session_name}`,
-        },
+        ...baseConfigWpp(session_name),
 
-        // Cuando genera QR
-        catchQR: async (base64Qr) => {
-          await this.prisma.whatsappSession.update({
+        catchQR: async (qr) => {
+          const session = await this.prisma.whatsappSession.update({
             where: { session_name },
             data: { session_state: 'qrGenerated' },
           });
 
-          this.gateway.emitQR(identification, base64Qr);
-
-          console.log('QR enviado al frontend:', identification);
+          this.gateway.emitQR(identification, qr);
+          // this.gateway.emitStatus(identification, session);
         },
 
         statusFind: async (status) => {
-          // Si WA desconecta remotamente, limpiar el Map para permitir reinicio
-          if (
-            status === WHATSAPP_SESSION_STATUS.DISCONNECTED ||
-            status === 'serverClose'
-          ) {
-            this.clients.delete(session_name);
-          }
+          // ❗ aquí NO usamos client
+          const session = await this.prisma.whatsappSession.update({
+            where: { session_name },
+            data: { session_state: status },
+          });
 
-          let whatsapp_session: WhatsappSession | undefined;
-          if (
-            status === WHATSAPP_SESSION_STATUS.QR_SCANNED ||
-            status === WHATSAPP_SESSION_STATUS.IN_CHAT
-          ) {
-            // const wid = await client.getWid();
-            // const phone = extractPhoneFromWid(wid);
-
-            // whatsapp_session = await this.prisma.whatsappSession.update({
-            //   where: { session_name },
-            //   data: {
-            //     session_state: status,
-            //     phone,
-            //   },
-            // });
-            // ✅ Obtener el client desde el Map, no del closure
-            const activeClient = this.clients.get(session_name) ?? client;
-
-            console.log({ activeClient });
-
-            try {
-              const wid = await activeClient.getWid();
-              const phone = extractPhoneFromWid(wid);
-
-              whatsapp_session = await this.prisma.whatsappSession.update({
-                where: { session_name },
-                data: { session_state: status, phone },
-              });
-            } catch {
-              // Si aún no está listo, actualizar sin phone
-              whatsapp_session = await this.prisma.whatsappSession.update({
-                where: { session_name },
-                data: { session_state: status },
-              });
-            }
-          } else {
-            whatsapp_session = await this.prisma.whatsappSession.update({
-              where: { session_name },
-              data: { session_state: status },
-            });
-          }
-
-          this.gateway.emitStatus(identification, whatsapp_session);
+          this.gateway.emitStatus(identification, session);
         },
       });
 
-      this.clients.set(session_name, client);
+      // 🔑 recién aquí el client existe
+      this.sessionManager.set(session_name, client);
+
+      await this.onClientReady(session_name, identification, client);
+      await this.registerEvents(session_name, identification, client);
     } catch (error) {
-      console.error(`Error iniciando sesión ${session_name}`, error);
-
-      await this.prisma.whatsappSession.update({
-        where: { session_name },
-        data: {
-          session_state: WHATSAPP_SESSION_STATUS.DISCONNECTED,
-          status: false,
-        },
-      });
+      console.error('INIT CLIENT ERROR', error);
     }
   }
+  async onClientReady(
+    session_name: string,
+    identification: number,
+    client: any,
+  ) {
+    try {
+      const wid = await client.getWid();
+      const phone = wid.split('@')[0];
+
+      const session = await this.prisma.whatsappSession.update({
+        where: { session_name },
+        data: {
+          phone,
+          session_state: 'inChat',
+          status: true,
+        },
+      });
+
+      this.gateway.emitStatus(identification, session);
+    } catch (err) {
+      console.log('cliente aún no listo');
+    }
+  }
+  registerEvents(session_name: string, identification: number, client: any) {
+    client.onStateChange(async (state) => {
+      console.log(`STATE ${session_name}`, state);
+
+      if (state === 'CONFLICT') {
+        await client.useHere();
+      }
+
+      if (state === 'UNPAIRED') {
+        this.sessionManager.remove(session_name);
+        try {
+          await client.close(); // 🔴 cerrar chromium
+        } catch {}
+
+        const session = await this.prisma.whatsappSession.update({
+          where: { session_name },
+          data: {
+            session_state: WHATSAPP_SESSION_STATUS.DISCONNECTED,
+            status: false,
+          },
+        });
+
+        this.gateway.emitStatus(identification, session);
+      }
+    });
+  }
+
+  // async sendMessage(session_name: string, dto: SendMessageDto) {
+  //   const session = await this.prisma.whatsappSession.findUnique({
+  //     where: { session_name },
+  //   });
+
+  //   if (!session) throw new Error('Sesión no encontrada');
+  //   if (session.session_state !== 'inChat')
+  //     throw new Error('Sesión no conectada');
+
+  //   let client = clients.get(session_name);
+  //   if (!client) {
+  //     await this.initClient(session_name, session.identification);
+  //     client = clients.get(session_name);
+  //   }
+  //   if (!client) throw new Error('Cliente no conectado en runtime');
+
+  //   const to = dto.destination.replace(/\D/g, '') + '@c.us';
+  //   return client.sendText(to, dto.message);
+  // }
 
   async sendMessage(session_name: string, dto: SendMessageDto) {
     const session = await this.prisma.whatsappSession.findUnique({
@@ -202,17 +149,22 @@ export class WhatsappService implements OnModuleInit {
     });
 
     if (!session) throw new Error('Sesión no encontrada');
+
     if (session.session_state !== 'inChat')
       throw new Error('Sesión no conectada');
 
-    let client = this.clients.get(session_name);
+    let client = this.sessionManager.get(session_name);
+
     if (!client) {
       await this.initClient(session_name, session.identification);
-      client = this.clients.get(session_name);
+
+      client = this.sessionManager.get(session_name);
     }
-    if (!client) throw new Error('Cliente no conectado en runtime');
+
+    if (!client) throw new Error('Cliente no conectado');
 
     const to = dto.destination.replace(/\D/g, '') + '@c.us';
+
     return client.sendText(to, dto.message);
   }
 }

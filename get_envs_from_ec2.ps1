@@ -1,1 +1,1 @@
-scp ubuntu@3.22.200.156:/home/ubuntu/micro_api_wsp/.env* .
+scp ubuntu@3.134.175.122:/home/ubuntu/micro_api_wsp/.env* .

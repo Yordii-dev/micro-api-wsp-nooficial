@@ -35,6 +35,3 @@ COPY prisma.config.ts ./
 
 COPY entrypoint.sh ./
 ENTRYPOINT ["sh", "entrypoint.sh"]
-
-
-# CMD ["npm", "run", "start:prod"]
